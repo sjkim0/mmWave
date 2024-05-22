@@ -59,7 +59,16 @@ static void MX_LPUART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint8_t rx_buffer[100] = {0, };
 
+
+void delay(uint32_t tick)
+{
+  while(HAL_GetTick() - tick < 10)
+  {
+
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -95,6 +104,21 @@ int main(void)
   MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
+
+  HAL_UART_Receive_DMA(&hlpuart1, rx_buffer, 100);
+
+  delay(10);
+
+//  uint8_t enable_config[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x10, 0x00, 0x04, 0x03, 0x02, 0x01};
+//  HAL_UART_Transmit_DMA(&hlpuart1, enable_config, sizeof(enable_config));
+//  delay(10);
+//  uint8_t read_current_zone_filtering[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xC1, 0x00, 0x04, 0x03, 0x02, 0x01};
+//  HAL_UART_Transmit_DMA(&hlpuart1, read_current_zone_filtering, sizeof(read_current_zone_filtering));
+//  delay(10);
+
+//uint8_t end_config[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x10, 0x00, 0x04, 0x03, 0x02, 0x01};
+//  HAL_UART_Transmit_DMA(&hlpuart1, end_config, sizeof(end_config));
+//  delay(10);
   /* USER CODE END 2 */
 
   /* Infinite loop */
