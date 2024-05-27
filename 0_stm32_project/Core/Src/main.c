@@ -18,10 +18,15 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "ld2450.h"
 
+extern DMA_HandleTypeDef hdma_lpuart1_rx;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,9 +45,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef hlpuart1;
-DMA_HandleTypeDef hdma_lpuart1_rx;
-DMA_HandleTypeDef hdma_lpuart1_tx;
 
 /* USER CODE BEGIN PV */
 
@@ -50,25 +52,23 @@ DMA_HandleTypeDef hdma_lpuart1_tx;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_LPUART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
 uint8_t rx_buffer[100] = {0, };
+int rx_history = 0;
+uint32_t rx_tick;
 
 
-void delay(uint32_t tick)
-{
-  while(HAL_GetTick() - tick < 10)
-  {
+static void delay(uint32_t tick);
+static void parseStart(int rx_start_index, int length);
 
-  }
-}
+
 /* USER CODE END 0 */
 
 /**
@@ -105,20 +105,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
-  HAL_UART_Receive_DMA(&hlpuart1, rx_buffer, 100);
+  HAL_UART_Receive_DMA(&hlpuart1, rx_buffer, sizeof(rx_buffer));
 
   delay(10);
-
-//  uint8_t enable_config[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x10, 0x00, 0x04, 0x03, 0x02, 0x01};
-//  HAL_UART_Transmit_DMA(&hlpuart1, enable_config, sizeof(enable_config));
-//  delay(10);
-//  uint8_t read_current_zone_filtering[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xC1, 0x00, 0x04, 0x03, 0x02, 0x01};
-//  HAL_UART_Transmit_DMA(&hlpuart1, read_current_zone_filtering, sizeof(read_current_zone_filtering));
-//  delay(10);
-
-//uint8_t end_config[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x10, 0x00, 0x04, 0x03, 0x02, 0x01};
-//  HAL_UART_Transmit_DMA(&hlpuart1, end_config, sizeof(end_config));
-//  delay(10);
+  rx_history = hdma_lpuart1_rx.Instance->CNDTR;
+  initLd2450();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,6 +119,23 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(rx_history != hdma_lpuart1_rx.Instance->CNDTR)
+	  {
+	      if(HAL_GetTick() - rx_tick > 10)
+	      {
+	          rx_tick = HAL_GetTick();
+	          int rx_start = sizeof(rx_buffer) - rx_history;
+	          int rx_length;
+	          rx_history = hdma_lpuart1_rx.Instance->CNDTR;
+	          rx_length = (sizeof(rx_buffer) + (sizeof(rx_buffer) - rx_history) - rx_start) % sizeof(rx_buffer);
+
+	          parseStart(rx_start, rx_length);
+	      }
+	  }
+	  else
+	  {
+	      rx_tick = HAL_GetTick();
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -177,93 +185,81 @@ void SystemClock_Config(void)
   }
 }
 
-/**
-  * @brief LPUART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_LPUART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN LPUART1_Init 0 */
-
-  /* USER CODE END LPUART1_Init 0 */
-
-  /* USER CODE BEGIN LPUART1_Init 1 */
-
-  /* USER CODE END LPUART1_Init 1 */
-  hlpuart1.Instance = LPUART1;
-  hlpuart1.Init.BaudRate = 256000;
-  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
-  hlpuart1.Init.StopBits = UART_STOPBITS_1;
-  hlpuart1.Init.Parity = UART_PARITY_NONE;
-  hlpuart1.Init.Mode = UART_MODE_TX_RX;
-  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  hlpuart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetTxFifoThreshold(&hlpuart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetRxFifoThreshold(&hlpuart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_DisableFifoMode(&hlpuart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN LPUART1_Init 2 */
-
-  /* USER CODE END LPUART1_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMAMUX1_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
-}
-
 /* USER CODE BEGIN 4 */
 
+static void delay(uint32_t tick)
+{
+  while(HAL_GetTick() - tick < 10)
+  {
+
+  }
+}
+
+static void parseStart(int rx_start_index, int length)
+{
+    static uint8_t head_checked = 0;  // 4 -> checked
+
+
+    for(int i = rx_start_index; i <= length; i++)
+    {
+        switch(rx_buffer[i])
+        {
+            case 0xFD:
+                if(head_checked == 0)
+                {
+                    head_checked += 1;
+                }
+                else
+                {
+                    head_checked = 0;
+                }
+                break;
+            case 0xFC:
+                if(head_checked == 1)
+                {
+                    head_checked += 1;
+                }
+                else
+                {
+                    head_checked = 0;
+                }
+                break;
+            case 0xFB:
+                if(head_checked == 2)
+                {
+                    head_checked += 1;
+                }
+                else
+                {
+                    head_checked = 0;
+                }
+                break;
+            case 0xFA:
+                if(head_checked == 3)
+                {
+                    head_checked += 1;
+                }
+                else
+                {
+                    head_checked = 0;
+                }
+                break;
+            default:
+                if(head_checked == 4)    // get in frame data length 2byte
+                {
+                    // TODO: get fram data length, do parse using i++
+                    head_checked = 0;
+                }
+                else  // end of frame
+                {
+                    // TODO: check end of frame byte
+                    head_checked = 0;
+                }
+                break;
+        }
+        i %= sizeof(rx_buffer);
+    }
+}
 /* USER CODE END 4 */
 
 /**
