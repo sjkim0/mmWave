@@ -37,6 +37,26 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
+
+#define DEF_RX_BUFFER_LENGTH (4096U)
+#define DEF_PARSE_BUFF_LENGTH (100U)
+
+typedef struct
+{
+    uint8_t rx_buffer[DEF_RX_BUFFER_LENGTH];
+    int rx_history;
+    uint8_t head_checked;
+    uint16_t rx_command;
+    uint16_t rx_done;
+    uint8_t parse_buffer[DEF_PARSE_BUFF_LENGTH];
+    int parse_buff_header;
+    int parse_buff_tail;
+    uint32_t parse_period_tick_ms;
+}comm_t;
+
+
+extern comm_t comm_inst;
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

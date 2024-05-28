@@ -36,7 +36,6 @@ extern DMA_HandleTypeDef hdma_lpuart1_rx;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,13 +59,16 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 
 
-uint8_t rx_buffer[100] = {0, };
-int rx_history = 0;
+comm_t comm_inst;
+
 uint32_t rx_tick;
 
 
 static void delay(uint32_t tick);
 static void parseStart(int rx_start_index, int length);
+
+int length_history_index = 0;
+int length_history[200] = {0, };
 
 
 /* USER CODE END 0 */
@@ -105,10 +107,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
-  HAL_UART_Receive_DMA(&hlpuart1, rx_buffer, sizeof(rx_buffer));
+  HAL_UART_Receive_DMA(&hlpuart1, comm_inst.rx_buffer, DEF_RX_BUFFER_LENGTH);
 
   delay(10);
-  rx_history = hdma_lpuart1_rx.Instance->CNDTR;
+  comm_inst.rx_history = hdma_lpuart1_rx.Instance->CNDTR;
   initLd2450();
   /* USER CODE END 2 */
 
@@ -119,16 +121,21 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if(rx_history != hdma_lpuart1_rx.Instance->CNDTR)
+
+	  if(comm_inst.rx_history != hdma_lpuart1_rx.Instance->CNDTR)
 	  {
-	      if(HAL_GetTick() - rx_tick > 10)
+	      if(HAL_GetTick() - rx_tick > comm_inst.parse_period_tick_ms)
 	      {
 	          rx_tick = HAL_GetTick();
-	          int rx_start = sizeof(rx_buffer) - rx_history;
+	          int rx_start = DEF_RX_BUFFER_LENGTH - comm_inst.rx_history;
 	          int rx_length;
-	          rx_history = hdma_lpuart1_rx.Instance->CNDTR;
-	          rx_length = (sizeof(rx_buffer) + (sizeof(rx_buffer) - rx_history) - rx_start) % sizeof(rx_buffer);
-
+	          comm_inst.rx_history = hdma_lpuart1_rx.Instance->CNDTR;
+	          rx_length = (DEF_RX_BUFFER_LENGTH + (DEF_RX_BUFFER_LENGTH - comm_inst.rx_history) - rx_start) % DEF_RX_BUFFER_LENGTH;
+	          length_history[length_history_index] = rx_length;
+	          if(length_history_index != 200)
+	          {
+	              length_history_index += 1;
+	          }
 	          parseStart(rx_start, rx_length);
 	      }
 	  }
@@ -197,67 +204,41 @@ static void delay(uint32_t tick)
 
 static void parseStart(int rx_start_index, int length)
 {
-    static uint8_t head_checked = 0;  // 4 -> checked
-
-
     for(int i = rx_start_index; i <= length; i++)
     {
-        switch(rx_buffer[i])
+        int index_buff = i %= DEF_RX_BUFFER_LENGTH;
+
+        switch(comm_inst.rx_buffer[index_buff])
         {
-            case 0xFD:
-                if(head_checked == 0)
-                {
-                    head_checked += 1;
-                }
-                else
-                {
-                    head_checked = 0;
-                }
+            case 0xFD:  // command header 0
                 break;
-            case 0xFC:
-                if(head_checked == 1)
-                {
-                    head_checked += 1;
-                }
-                else
-                {
-                    head_checked = 0;
-                }
+            case 0xFC:  // command header 1
                 break;
-            case 0xFB:
-                if(head_checked == 2)
-                {
-                    head_checked += 1;
-                }
-                else
-                {
-                    head_checked = 0;
-                }
+            case 0xFB:  // command header 2
                 break;
-            case 0xFA:
-                if(head_checked == 3)
-                {
-                    head_checked += 1;
-                }
-                else
-                {
-                    head_checked = 0;
-                }
+            case 0xFA:  // command header 3
+                break;
+            case 0x04:  // command end 0
+                break;
+            case 0x03:  // command end 1,   // radar data head 2
+                break;
+            case 0x02:  // command end 2
+                break;
+            case 0x01:  // command end 3
+                break;
+            case 0xAA:  // radar data head 0
+                break;
+            case 0xFF:  // radar data head 1
+                break;
+            case 0x00:  // radar data head 3
+                break;
+            case 0x55:  // radar data end 0
+                break;
+            case 0xCC:  // radar data end 1
                 break;
             default:
-                if(head_checked == 4)    // get in frame data length 2byte
-                {
-                    // TODO: get fram data length, do parse using i++
-                    head_checked = 0;
-                }
-                else  // end of frame
-                {
-                    // TODO: check end of frame byte
-                    head_checked = 0;
-                }
                 break;
         }
-        i %= sizeof(rx_buffer);
     }
 }
 /* USER CODE END 4 */
