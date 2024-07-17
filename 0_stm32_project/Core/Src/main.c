@@ -112,6 +112,7 @@ int main(void)
   delay(10);
   comm_inst.rx_history = hdma_lpuart1_rx.Instance->CNDTR;
   initLd2450();
+  rx_tick = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -196,7 +197,8 @@ void SystemClock_Config(void)
 
 static void delay(uint32_t tick)
 {
-  while(HAL_GetTick() - tick < 10)
+  uint32_t now_tick = HAL_GetTick();
+  while(HAL_GetTick() - now_tick < tick)
   {
 
   }
